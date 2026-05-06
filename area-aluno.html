@@ -77,7 +77,8 @@
         const sel = document.getElementById('sel-aluno');
         sel.innerHTML = '<option value="">Selecione seu nome</option>';
         lista.forEach(a => {
-          sel.innerHTML += `<option value="${a._id}" data-curso="${a.idCurso}">${a.nome}</option>`;
+         const idCurso = a.idCurso && a.idCurso._id ? a.idCurso._id : a.idCurso;
+sel.innerHTML += `<option value="${a._id}" data-curso="${idCurso}">${a.nome}</option>`;
         });
       } catch (err) {
         console.error('Erro ao carregar alunos:', err);

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gerenciar Cursos</title>
+  <link rel="stylesheet" href="global.css" />
+  <style>
+    .regra-linha { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .regra-linha select, .regra-linha input { padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
+    .btn-remover-regra { background: #fee2e2; color: #991b1b; border: none; border-radius: var(--radius); padding: 6px 10px; cursor: pointer; font-size: 13px; }
+    .progresso-bar { background: #e5e7eb; border-radius: 4px; height: 8px; margin-top: 4px; }
+    .progresso-fill { background: #2563eb; border-radius: 4px; height: 8px; transition: width .3s; }
+    .regras-lista { margin-top: 8px; }
+    .regra-item { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); padding: 2px 0; }
+    .tabela-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 500px; }
+    th { background: var(--bg); font-size: 12px; font-weight: 600; text-align: left; padding: 10px 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Gerenciar Cursos</h1>
+    <a href="dashbord.html">Voltar</a>
+  </div>
+
+  <div class="content">
+    <div class="card">
+      <h2>Novo Curso</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Nome do Curso</label>
+          <input type="text" id="nome" placeholder="Ex: Sistemas de Informação" />
+        </div>
+        <div class="form-group">
+          <label>Total de Horas Complementares</label>
+          <input type="number" id="cargaHorariaTotal" placeholder="Ex: 200" min="1" />
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:12px;">
+        <label style="margin-bottom:8px;display:block;">Limite de Horas por Categoria <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
+        <div id="regras-container"></div>
+        <button class="btn btn-secondary" style="margin-top:8px;font-size:13px;" onclick="adicionarRegraCategoria()">+ Adicionar Categoria</button>
+      </div>
+
+      <p id="msg-curso" style="margin-bottom:10px; font-size:0.9rem;"></p>
+      <button class="btn btn-primary" id="btn-criar" onclick="criarCurso()">Criar Curso</button>
+    </div>
+
+    <div class="card">
+      <h2>Cursos Cadastrados</h2>
+      <div class="tabela-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Total de Horas</th>
+              <th>Regras por Categoria</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-cursos">
+            <tr><td colspan="4" style="text-align:center;color:#888;">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Editar -->
+  <div class="modal-overlay" id="modal-editar">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Editar Curso</h2>
+        <button class="modal-fechar" onclick="fecharModal()">×</button>
+      </div>
+      <div class="form-grid" style="margin-top:10px;">
+        <div class="form-group">
+          <label>Nome</label>
+          <input type="text" id="edit-nome" />
+        </div>
+        <div class="form-group">
+          <label>Total de Horas</label>
+          <input type="number" id="edit-horas" min="1" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label style="margin-bottom:8px;display:block;">Limite de Horas por Categoria</label>
+        <div id="edit-regras-container"></div>
+        <button class="btn btn-secondary" style="margin-top:8px;font-size:13px;" onclick="adicionarRegraCategoria('edit')">+ Adicionar</button>
+      </div>
+      <input type="hidden" id="edit-id" />
+      <p id="msg-edit" style="font-size:0.9rem; margin-bottom:8px;"></p>
+      <button class="btn btn-primary" style="width:100%;margin-top:12px;" onclick="salvarEdicao()">Salvar Alterações</button>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    let listaCategorias = [];
+
+    async function init() {
+      listaCategorias = await categorias.listar().catch(() => []);
+      carregarCursos();
+    }
+
+    function criarSelectCategoria(valor = '') {
+      const sel = document.createElement('select');
+      sel.innerHTML = `<option value="">Selecione a categoria</option>` +
+        listaCategorias.map(c => `<option value="${c._id}" ${c._id === valor ? 'selected' : ''}>${c.nome}</option>`).join('');
+      return sel;
+    }
+
+    function adicionarRegraCategoria(prefixo = 'novo') {
+      const container = document.getElementById(prefixo === 'edit' ? 'edit-regras-container' : 'regras-container');
+      const div = document.createElement('div');
+      div.className = 'regra-linha';
+
+      const sel = criarSelectCategoria();
+      sel.className = 'regra-categoria';
+
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.min = '1';
+      inp.placeholder = 'Máx. horas';
+      inp.className = 'regra-maxhoras';
+      inp.style.width = '100px';
+
+      const btn = document.createElement('button');
+      btn.className = 'btn-remover-regra';
+      btn.textContent = '✕';
+      btn.onclick = () => div.remove();
+
+      div.appendChild(sel);
+      div.appendChild(inp);
+      div.appendChild(btn);
+      container.appendChild(div);
+    }
+
+    function coletarRegras(prefixo = 'regras-container') {
+      const container = document.getElementById(prefixo);
+      const regras = [];
+      container.querySelectorAll('.regra-linha').forEach(linha => {
+        const idCat = linha.querySelector('.regra-categoria').value;
+        const max   = parseInt(linha.querySelector('.regra-maxhoras').value);
+        if (idCat && max > 0) regras.push({ idCategoria: idCat, maxHoras: max });
+      });
+      return regras;
+    }
+
+    async function criarCurso() {
+      const nome = document.getElementById('nome').value.trim();
+      const cargaHorariaTotal = parseInt(document.getElementById('cargaHorariaTotal').value);
+      const regrasCategoria = coletarRegras('regras-container');
+      const msg = document.getElementById('msg-curso');
+
+      if (!nome || !cargaHorariaTotal) {
+        msg.style.color = 'red'; msg.textContent = 'Preencha nome e carga horária.'; return;
+      }
+      try {
+        await cursos.criar({ nome, cargaHorariaTotal, regrasCategoria });
+        msg.style.color = 'green'; msg.textContent = 'Curso criado!';
+        document.getElementById('nome').value = '';
+        document.getElementById('cargaHorariaTotal').value = '';
+        document.getElementById('regras-container').innerHTML = '';
+        carregarCursos();
+      } catch (err) {
+        msg.style.color = 'red'; msg.textContent = err.message;
+      }
+    }
+
+    async function carregarCursos() {
+      const tbody = document.getElementById('tabela-cursos');
+      try {
+        const lista = await cursos.listar();
+        if (!lista.length) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">Nenhum curso cadastrado.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = lista.map(c => {
+          const regrasHtml = c.regrasCategoria && c.regrasCategoria.length > 0
+            ? c.regrasCategoria.map(r => `
+                <div class="regra-item">
+                  <span>${r.idCategoria?.nome || '—'}</span>
+                  <span>${r.maxHoras}h</span>
+                </div>`).join('')
+            : '<span style="color:#aaa;font-size:12px;">Sem limites por categoria</span>';
+
+          return `
+          <tr>
+            <td><strong>${c.nome}</strong></td>
+            <td>${c.cargaHorariaTotal}h</td>
+            <td><div class="regras-lista">${regrasHtml}</div></td>
+            <td>
+              <div class="btn-group">
+                <button class="btn btn-primary" onclick="abrirModal('${c._id}')">Editar</button>
+                <button class="btn btn-secondary" onclick="excluirCurso('${c._id}','${c.nome}')">Excluir</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:red;">${err.message}</td></tr>`;
+      }
+    }
+
+    async function abrirModal(id) {
+      const c = await cursos.buscar(id).catch(() => null);
+      if (!c) return;
+      document.getElementById('edit-id').value = c._id;
+      document.getElementById('edit-nome').value = c.nome;
+      document.getElementById('edit-horas').value = c.cargaHorariaTotal;
+
+      const container = document.getElementById('edit-regras-container');
+      container.innerHTML = '';
+      (c.regrasCategoria || []).forEach(r => {
+        adicionarRegraCategoria('edit');
+        const linha = container.lastElementChild;
+        const idCat = r.idCategoria?._id || r.idCategoria;
+        linha.querySelector('.regra-categoria').value = idCat;
+        linha.querySelector('.regra-maxhoras').value  = r.maxHoras;
+      });
+
+      document.getElementById('modal-editar').classList.add('aberto');
+    }
+
+    function fecharModal() { document.getElementById('modal-editar').classList.remove('aberto'); }
+
+    async function salvarEdicao() {
+      const id    = document.getElementById('edit-id').value;
+      const nome  = document.getElementById('edit-nome').value.trim();
+      const carga = parseInt(document.getElementById('edit-horas').value);
+      const regrasCategoria = coletarRegras('edit-regras-container');
+      const msg   = document.getElementById('msg-edit');
+
+      try {
+        await cursos.editar(id, { nome, cargaHorariaTotal: carga, regrasCategoria });
+        fecharModal(); carregarCursos();
+      } catch (err) { msg.style.color = 'red'; msg.textContent = err.message; }
+    }
+
+    async function excluirCurso(id, nome) {
+      if (!confirm(`Excluir o curso "${nome}"?`)) return;
+      try { await cursos.excluir(id); carregarCursos(); }
+      catch (err) { alert('Erro: ' + err.message); }
+    }
+
+    init();
+  </script>
+</body>
+</html>
